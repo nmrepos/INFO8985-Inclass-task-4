@@ -1,5 +1,0 @@
-{
-    "containerEnv": {
-        "K8S": "k3d"
-    }
-}

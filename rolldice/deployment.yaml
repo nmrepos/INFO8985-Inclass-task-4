@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rolldice-app
+  namespace: rolldice
+  labels:
+    app: rolldice
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rolldice
+  template:
+    metadata:
+      labels:
+        app: rolldice
+    spec:
+      containers:
+      - name: rolldice
+        image: "ghcr.io/open-telemetry/demo:latest-rolldice"
+        imagePullPolicy: Always
+        
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        
+        # Environment variables for OpenTelemetry
+        env:
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://k8s-infra-opentelemetry-collector.k8s-infra.svc.cluster.local:4317"
+        - name: OTEL_EXPORTER_OTLP_PROTOCOL
+          value: "grpc"
+        - name: OTEL_SERVICE_NAME
+          value: "rolldice-app"
+        - name: OTEL_SERVICE_VERSION
+          value: "1.0.0"
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=rolldice-app,service.version=1.0.0"
+        - name: OTEL_TRACES_EXPORTER
+          value: "otlp"
+        - name: OTEL_METRICS_EXPORTER
+          value: "otlp"
+        - name: OTEL_LOGS_EXPORTER
+          value: "otlp"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rolldice-service
+  namespace: rolldice
+  labels:
+    app: rolldice
+spec:
+  selector:
+    app: rolldice
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP

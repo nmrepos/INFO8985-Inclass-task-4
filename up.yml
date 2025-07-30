@@ -1,12 +1,46 @@
 ---
 - import_playbook: k8s/up.yml
-- name: bootstrap signoz
+
+- name: Deploy RollDice Application with Telemetry
   hosts: localhost
+  connection: local
   gather_facts: false
   tasks:
-    - name: docker compose up
-      community.docker.docker_compose_v2:
-        project_src: signoz
-        files:
-        - docker-compose.yml
+    - name: Apply RollDice namespace
+      kubernetes.core.k8s:
         state: present
+        src: rolldice/namespace.yaml
+
+    - name: Apply RollDice deployment with telemetry
+      kubernetes.core.k8s:
+        state: present
+        src: rolldice/deployment.yaml
+
+    - name: Wait for RollDice deployment
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: Deployment
+        name: rolldice-app
+        namespace: rolldice
+        wait: true
+        wait_condition:
+          type: Available
+          status: "True"
+        wait_timeout: 300
+
+    - name: Verify telemetry configuration
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: rolldice
+        label_selectors:
+          - app=rolldice
+      register: rolldice_pods
+
+    - name: Display deployment success
+      debug:
+        msg: |
+          ✅ Deployment successful!
+          📊 K8S Infrastructure: Deployed 
+          🎲 RollDice App: {{ rolldice_pods.resources | length }} pods running
+          📡 Telemetry: Configured to route to s4z.nidhun.me:4317

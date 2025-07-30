@@ -1,2 +1,21 @@
 ---
+- name: Remove RollDice Application
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Remove RollDice deployment
+      kubernetes.core.k8s:
+        state: absent
+        src: rolldice/deployment.yaml
+      ignore_errors: yes
+
+    - name: Remove RollDice namespace  
+      kubernetes.core.k8s:
+        state: absent
+        src: rolldice/namespace.yaml
+        wait: true
+        wait_timeout: 120
+      ignore_errors: yes
+
 - import_playbook: k8s/down.yml
