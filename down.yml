@@ -18,4 +18,39 @@
         wait_timeout: 120
       ignore_errors: yes
 
+- name: Remove K8S Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    namespace: "k8s-infra"
+    helm_chart_name: "k8s-infra"
+    
+  tasks:
+    - name: Uninstall K8S Infrastructure Helm Chart
+      kubernetes.core.helm:
+        name: "{{ helm_chart_name }}"
+        release_namespace: "{{ namespace }}"
+        state: absent
+        wait: true
+        wait_timeout: 300
+      ignore_errors: yes
+
+    - name: Remove namespace
+      kubernetes.core.k8s:
+        name: "{{ namespace }}"
+        api_version: v1
+        kind: Namespace
+        state: absent
+        wait: true
+        wait_timeout: 300
+      ignore_errors: yes
+
+    - name: Display removal status
+      debug:
+        msg: |
+          ✅ K8S Infrastructure removed successfully!
+          🗑️  Helm Chart: {{ helm_chart_name }} - REMOVED
+          🗑️  Namespace: {{ namespace }} - REMOVED
+
 - import_playbook: k8s/down.yml

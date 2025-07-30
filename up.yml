@@ -1,6 +1,102 @@
 ---
 - import_playbook: k8s/up.yml
 
+- name: Deploy K8S Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    namespace: "k8s-infra"
+    helm_chart_name: "k8s-infra"
+    helm_repo_name: "groundcover"
+    helm_repo_url: "https://helm.groundcover.com/"
+    signoz_endpoint: "s4z.nidhun.me"
+    signoz_port: "4317"
+    
+  tasks:
+    - name: Create namespace
+      kubernetes.core.k8s:
+        name: "{{ namespace }}"
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Add Helm repository
+      kubernetes.core.helm_repository:
+        name: "{{ helm_repo_name }}"
+        repo_url: "{{ helm_repo_url }}"
+        state: present
+
+    - name: Update Helm repositories
+      kubernetes.core.helm:
+        name: temp-update
+        state: absent
+        update_repo_cache: true
+
+    - name: Create values override file
+      copy:
+        content: |
+          # Simple configuration for K8S Infrastructure
+          opentelemetry-collector:
+            enabled: true
+            mode: daemonset
+            
+            # Configuration for upstream SigNoz
+            config:
+              exporters:
+                otlp:
+                  endpoint: "{{ signoz_endpoint }}:{{ signoz_port }}"
+                  tls:
+                    insecure: true
+                
+              service:
+                pipelines:
+                  traces:
+                    receivers: [otlp, jaeger]
+                    processors: [batch]
+                    exporters: [otlp]
+                  metrics:
+                    receivers: [otlp, prometheus]
+                    processors: [batch]
+                    exporters: [otlp]
+                  logs:
+                    receivers: [otlp]
+                    processors: [batch]
+                    exporters: [otlp]
+        dest: "/tmp/k8s-infra-values.yaml"
+
+    - name: Deploy K8S Infrastructure Helm Chart
+      kubernetes.core.helm:
+        name: "{{ helm_chart_name }}"
+        chart_ref: "{{ helm_repo_name }}/k8s-infra"
+        release_namespace: "{{ namespace }}"
+        create_namespace: true
+        values_files:
+          - "/tmp/k8s-infra-values.yaml"
+        wait: true
+        timeout: "10m"
+        state: present
+
+    - name: Wait for deployment
+      kubernetes.core.k8s_info:
+        api_version: apps/v1
+        kind: DaemonSet
+        namespace: "{{ namespace }}"
+        wait: true
+        wait_timeout: 300
+
+    - name: Display K8S Infrastructure status
+      debug:
+        msg: |
+          ✅ K8S Infrastructure deployed successfully!
+          📊 SigNoz Endpoint: {{ signoz_endpoint }}:{{ signoz_port }}
+          📝 Namespace: {{ namespace }}
+
+    - name: Cleanup temporary files
+      file:
+        path: "/tmp/k8s-infra-values.yaml"
+        state: absent
+
 - name: Deploy RollDice Application with Telemetry
   hosts: localhost
   connection: local
@@ -40,7 +136,7 @@
     - name: Display deployment success
       debug:
         msg: |
-          ✅ Deployment successful!
+          ✅ Complete deployment successful!
           📊 K8S Infrastructure: Deployed 
           🎲 RollDice App: {{ rolldice_pods.resources | length }} pods running
           📡 Telemetry: Configured to route to s4z.nidhun.me:4317
